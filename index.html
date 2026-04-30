@@ -1018,17 +1018,31 @@ async function doEmailLogin() {
   const pw    = document.getElementById('l-pw').value;
   if (!email) { setErr('이메일을 입력하세요.'); return; }
   if (!pw)    { setErr('비밀번호를 입력하세요.'); return; }
+  setErr('');
   try {
     await auth.signInWithEmailAndPassword(email, pw);
+    // 성공 시 onAuthStateChanged가 자동으로 앱 화면으로 전환
   } catch(e) {
-    if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') {
-      // 없으면 자동 가입
-      try {
-        await auth.createUserWithEmailAndPassword(email, pw);
-        toast('✅ 새 계정이 생성되었습니다!');
-      } catch(e2) { setErr(fbErrMsg(e2)); }
-    } else { setErr(fbErrMsg(e)); }
+    // Firebase SDK v9+ 에서는 비밀번호 오류도 invalid-credential로 올 수 있음
+    const newErrs = ['auth/invalid-credential','auth/invalid-login-credentials'];
+    if (newErrs.includes(e.code)) {
+      setErr('이메일 또는 비밀번호가 올바르지 않습니다.');
+    } else {
+      setErr(fbErrMsg(e));
+    }
   }
+}
+
+// 관리자용 신규 계정 생성 (별도 함수 — 직접 호출 시에만 사용)
+async function createAccount() {
+  const email = document.getElementById('l-email').value.trim();
+  const pw    = document.getElementById('l-pw').value;
+  if (!email || !pw) { setErr('이메일과 비밀번호를 입력하세요.'); return; }
+  if (pw.length < 6) { setErr('비밀번호는 6자 이상이어야 합니다.'); return; }
+  try {
+    await auth.createUserWithEmailAndPassword(email, pw);
+    toast('✅ 새 계정이 생성되었습니다!');
+  } catch(e) { setErr(fbErrMsg(e)); }
 }
 
 // Google 로그인
@@ -1060,11 +1074,18 @@ async function sendResetEmail() {
 }
 
 function fbErrMsg(e) {
-  const m = { 'auth/wrong-password':'비밀번호가 올바르지 않습니다.',
+  const m = {
+    'auth/wrong-password':'비밀번호가 올바르지 않습니다.',
     'auth/invalid-email':'올바른 이메일 형식이 아닙니다.',
     'auth/email-already-in-use':'이미 사용 중인 이메일입니다.',
     'auth/weak-password':'비밀번호는 6자 이상이어야 합니다.',
-    'auth/too-many-requests':'잠시 후 다시 시도해 주세요.' };
+    'auth/too-many-requests':'로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.',
+    'auth/user-not-found':'등록되지 않은 이메일입니다.',
+    'auth/invalid-credential':'이메일 또는 비밀번호가 올바르지 않습니다.',
+    'auth/invalid-login-credentials':'이메일 또는 비밀번호가 올바르지 않습니다.',
+    'auth/user-disabled':'비활성화된 계정입니다. 관리자에게 문의하세요.',
+    'auth/network-request-failed':'네트워크 오류. 인터넷 연결을 확인하세요.',
+    'auth/requires-recent-login':'보안을 위해 재로그인이 필요합니다.' };
   return m[e.code] || e.message;
 }
 function setErr(msg) { document.getElementById('l-err').textContent = msg; }
